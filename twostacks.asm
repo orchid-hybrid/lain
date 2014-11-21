@@ -127,7 +127,7 @@ _start:
 	defcode "DROP",4,0,DROP
 	pop rax
 	NEXT
-        
+
 	defcode "SWAP",4,0,SWAP
 	pop rax
 	pop rbx
@@ -155,7 +155,18 @@ _start:
 	mov rax,[rbx]	; fetch it
 	push rax	; push value onto stack
 	NEXT
+        
+	defcode "@B",2,0,FETCHBYTE
+	pop rbx		; address to fetch
+	movzx rax,byte [rbx]	; fetch it
+	push rax	; push value onto stack
+	NEXT
 
+        defcode "+",1,0,ADD
+	pop rax
+	add [rsp],rax
+	NEXT
+        
 	defcode "SYS_EXIT",8,0,SYS_EXIT
         xor rdi,rdi
         mov rax,60
@@ -201,6 +212,7 @@ _start:
         dq NOPE
         dq OKAY
         dq LIT,0x77777777,PRINTHEX
+        dq LIT,0x77777777,LIT,0x17171717,ADD,PRINTHEX
         dq NL
         dq LIT,0x78914715637
         dq PRINTHEX
@@ -213,9 +225,11 @@ _start:
         dq NL
         dq FOO,FETCH,PRINTHEX
         dq NL
-        dq LIT,0x77777777,FOO,STORE
+        dq LINK,FETCH,PRINTWORD
         dq NL
-        dq FOO,FETCH,PRINTHEX
+        dq LINK,FETCH,FETCH,PRINTWORD
+        dq NL
+        dq LINK,FETCH,FETCH,FETCH,PRINTWORD
         dq NL
         dq SYS_EXIT
         dq EXIT
@@ -227,8 +241,33 @@ _start:
         pop rsi
         NEXT
 
-        defvar "FOO",3,0,FOO,0x77777777
+        defcode "PRINTSTR",8,0,PRINTSTR
+        pop rax
+        pop rdx
+        push rsi
+        mov rsi,rax
+        mov rax,1
+        mov rdi,1
+        syscall
+        pop rsi
+        NEXT
 
+        defword "PRINTWORD",9,0,PRINTWORD
+        dq DUP,GETWORDLEN,SWAP,GETWORD
+        dq PRINTSTR
+        dq EXIT
+        
+        defword "GETWORDLEN",10,0,GETWORDLEN
+        dq LIT,8,ADD,FETCHBYTE
+        dq EXIT
+
+        defword "GETWORD",7,0,GETWORD
+        dq LIT,9,ADD
+        dq EXIT
+
+        defvar "FOO",3,0,FOO,0x77777777
+        
+        defvar "LINK",3,0,LINK,link
 
 print_hex:
         push rax
