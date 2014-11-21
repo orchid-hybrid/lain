@@ -7,6 +7,10 @@
 ;; rbp  return stack pointer
 ;; rsi  program counter
 
+        BUFSIZE equ 13
+        WORDBUFSIZE equ 255
+        
+        
 %macro NEXT 0
 ;; rsi points to a memory address
 ;; that memory address gets read into rax
@@ -84,8 +88,15 @@ cold_start dq THING
 section .bss
 ;ALIGN 4096
         return_stack resq 8192
-        return_stack_top:
-        
+return_stack_top:
+
+        buf resb BUFSIZE
+        bufidx resq 1
+        buflen resq 1
+
+        wordbuf resb WORDBUFSIZE
+        wordlen resq 1
+
         hex_buffer resb 16+2
         hex_buffer_end resb 1
 
@@ -182,6 +193,15 @@ _start:
         syscall
         pop rsi
 	NEXT
+
+        defcode "WORD",4,0,MYWORD
+        push rsi
+        call myword
+        pop rsi
+        mov rax,[wordlen]
+        push rax
+        push wordbuf
+        NEXT
         
 	defcode "NL",2,0,NL
         push rsi
@@ -230,6 +250,11 @@ _start:
         dq LINK,FETCH,FETCH,PRINTWORD
         dq NL
         dq LINK,FETCH,FETCH,FETCH,PRINTWORD
+        dq NL
+        dq NL
+        dq MYWORD,PRINTSTR
+        dq NL
+        dq MYWORD,PRINTSTR
         dq NL
         dq SYS_EXIT
         dq EXIT
@@ -300,3 +325,66 @@ print_hex:
         ret
 
 
+
+        
+        ;; MY CODE FOR READING WORDS
+
+key:
+        mov rax,[bufidx]
+        cmp rax,[buflen]
+        jb .skip
+
+        xor rax,rax
+        mov [bufidx],rax
+        
+        call sys_read
+        test rax,rax
+        jbe .die
+        mov [buflen],rax
+.skip:
+        mov rax,[bufidx]
+        add qword [bufidx],1
+        mov rax,[rax+buf]
+
+        ret        
+.die:
+        call sys_exit
+
+myword:
+        call key
+        cmp byte al,' '
+        je myword
+        cmp byte al,0xA
+        je myword
+
+        mov rcx,0
+        push rcx ; these pushes and pops suck but i dont know how else
+.loop:
+        pop rcx
+        mov byte [rcx+wordbuf],al
+        inc rcx
+        push rcx
+
+        call key
+        cmp byte al,' '
+        je .done
+        cmp byte al,0xA
+        jne .loop
+
+.done:
+        pop rcx
+        mov qword [wordlen],rcx
+        ret
+
+sys_read:
+        xor rax,rax
+        mov rdi,0
+        mov rsi,buf
+        mov rdx,BUFSIZE
+        syscall
+        ret
+
+sys_exit:
+        xor rdi,rdi
+        mov rax,60
+        syscall
